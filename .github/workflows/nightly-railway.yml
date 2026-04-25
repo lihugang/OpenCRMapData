@@ -58,14 +58,28 @@ jobs:
             local output="$3"
             local source="downloads/${slug}.osm.pbf"
             local route_relations="work/${slug}-type-route.osm.pbf"
+            local railway_relations="work/${slug}-route-railway.osm.pbf"
+            local allowed_network_relations="work/${slug}-allowed-network.osm.pbf"
+            local missing_network_relations="work/${slug}-missing-network.osm.pbf"
 
             download_file "${url}" "${source}"
 
             echo "::group::Extract ${output}"
-            osmium tags-filter -O -o "${route_relations}" "${source}" r/type=route
-            osmium tags-filter -O -o "${output}" "${route_relations}" r/route=railway
+            osmium tags-filter --progress -R -O -o "${route_relations}" "${source}" r/type=route
+            osmium tags-filter --progress -R -O -o "${railway_relations}" "${route_relations}" r/route=railway
+            osmium tags-filter --progress -R -O -o "${allowed_network_relations}" "${railway_relations}" 'r/network=中国铁路,台灣高鐵,臺鐵'
+            osmium tags-filter --progress -R -i -O -o "${missing_network_relations}" "${railway_relations}" r/network
+            osmium getid --progress -r -O -o "${output}" \
+              "${source}" \
+              -I "${allowed_network_relations}" \
+              -I "${missing_network_relations}"
             osmium fileinfo "${output}"
-            rm -f "${source}" "${route_relations}"
+            rm -f \
+              "${source}" \
+              "${route_relations}" \
+              "${railway_relations}" \
+              "${allowed_network_relations}" \
+              "${missing_network_relations}"
             echo "::endgroup::"
           }
 
@@ -123,6 +137,7 @@ jobs:
 
           echo "::group::Merge Taiwan into railway-china.osm.pbf"
           osmium merge \
+            --progress \
             -O \
             -o "out/railway-china.osm.pbf" \
             "work/railway-china-source.osm.pbf" \
